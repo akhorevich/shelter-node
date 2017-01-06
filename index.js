@@ -1,7 +1,10 @@
 var express = require('express')
 var app = express()
-var cheerio = require('cheerio')
-var request = require('request')
+var tress = require('tress');
+var needle = require('needle');
+var cheerio = require('cheerio');
+var resolve = require('url').resolve;
+var fs = require('fs');
 
 app.get('/', (req, res) => {
   res.send('Dogs Shelter Kozhuhovo')
@@ -32,25 +35,32 @@ app.listen(3000, function () {
 })
 
 function parser(tail) {
+  var URL = 'http://vao-priut.org/category/fotokatalog/' + tail;
+  var results;
 
-    var cards;
-    var nameReg = 'div.views-field-title span.field-content a';
-    var imageReg = 'div.views-field-image-image span.field-content a img'
-    const url = "http://vao-priut.org/category/fotokatalog/" + tail;
-    request(url, function(err, res, body){
-    if(err){console.log(err);}
-    else{
-      cards = [];
-      $ = cheerio.load(body);
-      $('td').each(function(){
-        cards.push({
-            name:$(nameReg,this).text(),
-            image:$(imageReg,this).attr('src')
-        });
+  var q = tress(function(url, callback){
+      needle.get(url, function(err, res){
+          if (err) throw err;
+
+          var $ = cheerio.load(res.body);
+          results = [];
+          $('td').each(function(){
+              results.push({
+                  name: $('div.views-field-title span.field-content a', this).text(),
+                  image: $('div.views-field-image-image span.field-content a img', this).attr('src')
+              });
+          });
+          results.splice(0,1);
+          console.log(results);
+          callback();
       });
-    }
-    console.log(cards);
-  });
-  var json = JSON.stringify(cards);
-  return json;
+  }, 1);
+
+  q.drain = function(){
+
+      fs.writeFileSync('./'+tail+'.json', JSON.stringify(results, null, 4));
+  }
+
+  q.push(URL);
+  return JSON.stringify(results);
 }
